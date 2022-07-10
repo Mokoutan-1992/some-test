@@ -130,6 +130,7 @@ class CollectBoneInfo:
 
     def __init__(self):
         # get data
+        self.bone_mapping = {}
         self.bones = {}
         self.root = bpy.data.objects['Nico My Sweet Devil UR']
         self.arm_obj = bpy.data.objects[self.root.name + "_arm"]
@@ -176,6 +177,7 @@ def edit_mode(obj):
     def decorator_function(function):
         @wraps(function)
         def result(*args, **kwargs):
+            sl = bm.selected_object()
             current_mode = bpy.context.mode
             if current_mode.startswith("EDIT"):
                 current_mode = "EDIT"
@@ -188,10 +190,20 @@ def edit_mode(obj):
             finally:
                 if not current_mode.startswith("EDIT"):
                     bpy.ops.object.mode_set(mode=current_mode, toggle=False)
+                bm.select_object(sl)
 
         return result
 
     return decorator_function
+
+
+def force_refresh():
+    current_mode = bpy.context.mode
+    if current_mode.startswith("EDIT"):
+        current_mode = "EDIT"
+    bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
+    bpy.ops.object.mode_set(mode='EDIT', toggle=False)
+    bpy.ops.object.mode_set(mode=current_mode, toggle=False)
 
 
 def _change_bone_layer(bone, target_layer):
@@ -207,7 +219,7 @@ def _change_bone_layer(bone, target_layer):
     bone.layers.update()
 
 
-@edit_mode(INFO.arm_obj)
+# @edit_mode(INFO.arm_obj)
 def _add_bone(new_bone_name, layer_id=16, suffix=True):
     edit_bones = INFO.arm_obj.data.edit_bones
     final_name = new_bone_name + int(suffix) * SUFFIX
@@ -218,7 +230,7 @@ def _add_bone(new_bone_name, layer_id=16, suffix=True):
     return new_bone
 
 
-@edit_mode(INFO.arm_obj)
+# @edit_mode(INFO.arm_obj)
 @hold_bone_layer(16)
 def _match_bone(source, target_pose_bone):
     obj = INFO.arm_obj
@@ -229,8 +241,8 @@ def _match_bone(source, target_pose_bone):
     source.layers.update()
 
 
-@edit_mode(INFO.arm_obj)
-@hold_bone_layer(16)
+# @edit_mode(INFO.arm_obj)
+# @hold_bone_layer(16)
 def _match_bone_rotation(source, target_bone):
     obj = INFO.arm_obj
     target_matrix = obj.matrix_world @ target_bone.matrix
@@ -241,61 +253,70 @@ def _match_bone_rotation(source, target_bone):
     source.layers.update()
 
 
-@edit_mode(INFO.arm_obj)
-def get_bone(bone_name, mode="data"):
-    # mode = ["data","pose","edit"]
-    if mode == "data":
-        return INFO.arm_obj.data.bones[bone_name]
-    elif mode == "pose":
-        return INFO.arm_obj.pose.bones[bone_name]
-    elif mode == "edit":
-        return INFO.arm_obj.data.edit_bones[bone_name]
-
-
-get_pose_bone = partial(get_bone, mode="pose")
-
-get_edit_bone = partial(get_bone, mode="edit")
+# def get_bone(bone_name):
+#     return INFO.arm_obj.data.bones[bone_name]
+#
+#
+# def get_pose_bone(bone_name):
+#     return INFO.arm_obj.pose.bones[bone_name]
+#
+#
+# def get_edit_bone(bone_name):
+#     return INFO.arm_obj.data.edit_bones[bone_name]
 
 
 @edit_mode(INFO.arm_obj)
-def create_insufficient_bones(suffix=True):
+def create_insufficient_bones(suffix=True, constraint=True):
     # root bone
     name = "root"
     root = _add_bone(name, suffix)
     root.head = (0, 0, 0)
     root.tail = (0, 0, 0.1)
-    INFO.bones[name] = root.name
+    # INFO.bones[name] = root.name
     # pelvis bone
     name = "pelvis"
     pelvis = _add_bone(name, suffix)
-    _match_bone(pelvis, get_pose_bone(INFO.bones["上半身"]))
-    _, y, z = get_pose_bone(INFO.bones["左足"]).matrix.translation
+    _match_bone(pelvis, INFO.arm_obj.pose.bones[INFO.bones["上半身"]])
+    _, y, z = INFO.arm_obj.pose.bones[INFO.bones["左足"]].matrix.translation
     pelvis.head = (0, y, z)
-    pelvis.tail = get_pose_bone(INFO.bones["下半身"]).head
+    pelvis.tail = INFO.arm_obj.pose.bones[INFO.bones["下半身"]].head
     pelvis.parent = root
-    INFO.bones[name] = pelvis.name
+    # INFO.bones[name] = pelvis.name
+    if constraint:
+        # pelvis to "下半身"
+        pose_bone = INFO.arm_obj.pose.bones[name + int(suffix) * SUFFIX]
+        crc = pose_bone.constraints.new(type='CHILD_OF')
+        crc.target = INFO.arm_obj
+        crc.subtarget = "下半身"
 
 
-FORCE_CONNECT = ["上半身", "上半身2", "首", "頭",
-                 "左ひざ", "左足首", "右ひざ", "右足首",
-                 "左腕", "左ひじ", "左手首", "右腕", "右ひじ", "右手首",
-                 "左親指１", "左親指２", "右親指１", "右親指２",
-                 "左人指２", "左人指３", "右人指２", "右人指３",
-                 "左中指２", "左中指３", "右中指２", "右中指３",
-                 "左薬指２", "左薬指３", "右薬指２", "右薬指３",
-                 "左小指２", "左小指３", "右小指２", "右小指３"
-                 ]
+# test remove 上半身 connection
+FORCE_CONNECT = [
+    # "上半身",
+    "上半身2", "首", "頭",
+    "左ひざ", "左足首", "右ひざ", "右足首",
+    "左腕", "左ひじ", "左手首", "右腕", "右ひじ", "右手首",
+    "左親指１", "左親指２", "右親指１", "右親指２",
+    "左人指２", "左人指３", "右人指２", "右人指３",
+    "左中指２", "左中指３", "右中指２", "右中指３",
+    "左薬指２", "左薬指３", "右薬指２", "右薬指３",
+    "左小指２", "左小指３", "右小指２", "右小指３"
+]
 
 
 @edit_mode(INFO.arm_obj)
 def create_HIK_marking_bones(suffix=True):
     for bone_name, parent_name in mmdBoneHIK:
-        if bone_name:
-            mmd_bone = get_pose_bone(INFO.bones[bone_name])
+        if bone_name not in INFO.bones.keys():
+            if bone_name is not None:
+                print("skipping:  ", bone_name)
+        else:
+
+            mmd_bone = INFO.arm_obj.pose.bones[INFO.bones[bone_name]]
             new_bone = _add_bone(bone_name, suffix)
             _match_bone(new_bone, mmd_bone)
             if parent_name:
-                parent_edit_bone = get_edit_bone(parent_name + int(suffix) * SUFFIX)
+                parent_edit_bone = INFO.arm_obj.data.edit_bones[parent_name + int(suffix) * SUFFIX]
                 new_bone.parent = parent_edit_bone
                 if bone_name in FORCE_CONNECT:
                     new_bone.use_connect = True
@@ -307,21 +328,34 @@ def create_HIK_marking_bones(suffix=True):
 def rename_bones(suffix=True):
     mmd_bone_list = [bone_name for bone_name, _ in mmdBoneHIK]
     error = []
+    INFO.bone_mapping = {}
     for bone_name in INFO.bones.keys():
         if bone_name not in mmd_bone_list:
             continue
         else:
             index = mmd_bone_list.index(bone_name)
             new_name = epicBoneHIK[index]
-            bone = get_edit_bone(bone_name + int(suffix) * SUFFIX)
+            bone = INFO.arm_obj.data.edit_bones[bone_name + int(suffix) * SUFFIX]
             bone.name = new_name
             if bone.name[-3:].isdigit():
                 error.append((bone_name, bone.name))
+        INFO.bone_mapping[bone_name] = (INFO.bones[bone_name], bone.name)
     if error:
         print("error found:")
         print(error)
 
 
+def add_HIK_marking_bone_constraints():
+    print(INFO.bone_mapping)
+    for bone_mapping in INFO.bone_mapping.values():
+        pose_bone = INFO.arm_obj.pose.bones[bone_mapping[1]]
+        crc = pose_bone.constraints.new(type='COPY_ROTATION')
+        crc.target = INFO.arm_obj
+        crc.subtarget = bone_mapping[0]
+
+
+# print(list(INFO.arm_obj.pose.bones))
 create_insufficient_bones()
 create_HIK_marking_bones()
 rename_bones()
+add_HIK_marking_bone_constraints()
