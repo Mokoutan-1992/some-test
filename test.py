@@ -8,10 +8,6 @@ import mathutils
 print("---------------------------------------")
 epicBoneHIK = [
 
-]
-epicBoneHIKExtra = [
-    "root",
-    "pelvis",
     "thigh_l",
     "calf_l",
     "foot_l",
@@ -65,6 +61,10 @@ epicBoneHIKExtra = [
     "pinky_03_r",
 
 ]
+epicBoneHIKExtra = [
+    "root",
+    "pelvis",
+]
 
 mmdBoneHIK = [
     ("左足", "pelvis"),
@@ -90,7 +90,7 @@ mmdBoneHIK = [
     ("左人指１", "左手首"),
     ("左人指２", "左人指１"),
     ("左人指３", "左人指２"),
-    (u"左中指１", "左手首"),
+    ("左中指１", "左手首"),
     ("左中指２", "左中指１"),
     ("左中指３", "左中指２"),
     ("左薬指１", "左手首"),
@@ -134,7 +134,6 @@ class CollectBoneInfo:
         self.root = bpy.data.objects['Nico My Sweet Devil UR']
         self.arm_obj = bpy.data.objects[self.root.name + "_arm"]
         self.model_obj = bpy.data.objects[self.root.name + "_mesh"]
-
         self.store_bone_list_by_mmd_name()
 
     def store_bone_list_by_mmd_name(self):
@@ -304,5 +303,25 @@ def create_HIK_marking_bones(suffix=True):
                 _match_bone_rotation(new_bone, new_bone.parent)
 
 
+@edit_mode(INFO.arm_obj)
+def rename_bones(suffix=True):
+    mmd_bone_list = [bone_name for bone_name, _ in mmdBoneHIK]
+    error = []
+    for bone_name in INFO.bones.keys():
+        if bone_name not in mmd_bone_list:
+            continue
+        else:
+            index = mmd_bone_list.index(bone_name)
+            new_name = epicBoneHIK[index]
+            bone = get_edit_bone(bone_name + int(suffix) * SUFFIX)
+            bone.name = new_name
+            if bone.name[-3:].isdigit():
+                error.append((bone_name, bone.name))
+    if error:
+        print("error found:")
+        print(error)
+
+
 create_insufficient_bones()
 create_HIK_marking_bones()
+rename_bones()
